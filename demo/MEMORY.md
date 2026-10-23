@@ -1,0 +1,5 @@
+- The nightly digest schedule lives in config/schedule.yaml, keyed by weekday.
+- Tuesday was missing from the day list, not from the service.
+- Exports are renamed to the importer's columns, never the reverse.
+- Close Playwright tabs after a check or they pile up.
+- Dates in the changelog are day/month.

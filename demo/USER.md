@@ -1,0 +1,3 @@
+- Runs a two-person studio; asks for numbers, not adjectives.
+- Wants the reason before the fix.
+- Prefers a diff over a description of a diff.

@@ -1,0 +1,364 @@
+/* brain viewer — read-only view of a live agent
+   dark field, one accent per column: gold memory · violet reasoning · blue action · mint output */
+
+:root{
+  /* the iPhone island / notch strip: everything must stay out of it */
+  --sat:env(safe-area-inset-top, 0px);
+  --sab:env(safe-area-inset-bottom, 0px);
+
+  --bg:#05070c;
+  --panel:rgba(10,15,25,.78);
+  --line:rgba(255,255,255,.07);
+  --line2:rgba(255,255,255,.13);
+  --ink:#e8edf7;
+  --dim:#8a95a8;
+  --gold:#e8a13a;
+  --violet:#8b7cf6;
+  --blue:#3f6cff;
+  --mint:#3ddc97;
+  --teal:#35c6c6;
+  --red:#ef5b5b;
+}
+
+*{box-sizing:border-box;margin:0;padding:0}
+
+html{background:var(--bg);overscroll-behavior:none;-webkit-text-size-adjust:100%}
+body{
+  height:100dvh;
+  font-family:Montserrat,-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;
+  color:var(--ink);background:var(--bg);   /* one flat colour, no vignette */
+  overflow:hidden;overscroll-behavior:none;touch-action:manipulation;
+  -webkit-tap-highlight-color:transparent;-webkit-touch-callout:none;user-select:none;
+}
+@supports not (height:100dvh){body{height:100vh}}
+body.standalone{cursor:default}
+
+canvas#brain{position:fixed;inset:0;width:100%;height:100%;display:block;touch-action:manipulation}
+
+/* empty strip under the dynamic island — nothing drawn, nothing lit */
+#topscrim{
+  position:fixed;top:0;left:0;right:0;height:var(--sat);z-index:5;pointer-events:none;
+  background:var(--bg);
+}
+
+/* ---------------- header ---------------- */
+header{
+  position:fixed;top:var(--sat);left:0;right:0;z-index:6;pointer-events:none;
+  display:flex;align-items:center;gap:22px;
+  padding:14px calc(22px + env(safe-area-inset-right)) 10px calc(22px + env(safe-area-inset-left));
+}
+.brand{
+  font-size:11.5px;font-weight:600;letter-spacing:3.4px;
+  color:rgba(232,237,247,.62);
+}
+.brand b{color:var(--blue);font-weight:600;letter-spacing:3.4px}
+
+.legend{display:flex;align-items:center;gap:14px;margin-left:auto}
+.legend span{
+  display:inline-flex;align-items:center;gap:6px;
+  font-size:9px;letter-spacing:1.5px;text-transform:uppercase;color:var(--dim);
+}
+.legend i{display:block;width:14px;height:2px;border-radius:2px;opacity:.85}
+.legend i.sw{width:7px;height:7px;border-radius:50%}
+
+/* ---------------- status rail (left column on desktop) ---------------- */
+/* The card is not a neutral panel: it is the same four stages as the graph, so it wears
+   the colour of whatever is happening (JS sets --live / --live-a per state: memory gold,
+   reasoning cyan, the acting tool's hue, output mint). */
+#now{
+  --live:#4f6bb5;--live-a:#4f6bb548;
+  position:fixed;top:46px;bottom:62px;left:14px;width:262px;z-index:7;
+  display:flex;flex-direction:column;gap:12px;overflow:hidden;
+  padding:16px 14px 16px;border:1px solid var(--live-a);border-radius:16px;
+  background:var(--panel);backdrop-filter:blur(14px);
+}
+#now::before{
+  content:'';position:absolute;left:10px;right:10px;top:0;height:2px;border-radius:0 0 3px 3px;
+  background:linear-gradient(90deg,transparent,var(--live) 22%,var(--live) 78%,transparent);
+  opacity:.9;
+}
+#now::after{                      /* the stage glow behind the card, kept very low */
+  content:'';position:absolute;inset:0;border-radius:16px;pointer-events:none;
+  background:radial-gradient(120% 60% at 50% 0%,var(--live-a),transparent 62%);
+  opacity:.5;
+}
+
+.orbwrap{width:100%;height:auto;margin-top:auto;padding:10px 0 4px;display:flex;justify-content:center}
+#orb{width:min(240px,74%);aspect-ratio:1/1;height:auto;display:block}
+
+.nmain{text-align:center}
+.nstate{font-size:16px;font-weight:700;letter-spacing:.15px;color:var(--live);text-transform:lowercase;
+  font-variant-numeric:tabular-nums;text-shadow:0 0 16px var(--live-a)}
+.nsub{font-size:10px;letter-spacing:.9px;color:var(--live);opacity:.68;margin-top:4px;
+  text-transform:lowercase}
+.nrow{
+  display:flex;flex-wrap:wrap;justify-content:center;gap:2px 8px;margin-top:7px;
+  font-size:9px;font-weight:400;letter-spacing:.4px;line-height:1.45;
+  color:rgba(232,237,247,.55);font-variant-numeric:tabular-nums;
+}
+/* the label is a caption, not a heading: same weight as the value, a shade brighter */
+.nrow span{display:inline-flex;align-items:baseline;gap:4px;white-space:nowrap}
+.nrow b{font-weight:500;color:rgba(232,237,247,.58);letter-spacing:.5px}
+
+.nmeta{margin-top:auto;display:flex;flex-direction:column;gap:6px}
+
+/* what it is thinking, verbatim — revealed progressively because the row lands complete.
+   A left rule ties it to the rail instead of competing with the state word. */
+/* the thinking text is the thing Khanh actually reads, so it gets the room: 8.5px in a
+   58px box was a peephole. Larger type, taller box, and it scrolls to the newest line. */
+.nthink{
+  margin-top:10px;padding:2px 0 2px 9px;border-left:2px solid var(--live);
+  font:500 11px/1.58 ui-monospace,SFMono-Regular,Consolas,monospace;
+  letter-spacing:.1px;color:rgba(214,224,242,.9);text-align:left;
+  min-height:72px;max-height:min(38vh,240px);overflow-y:auto;overscroll-behavior:contain;
+  white-space:pre-wrap;word-break:break-word;scrollbar-width:thin;
+  scrollbar-color:var(--live) transparent;
+}
+.nthink::-webkit-scrollbar{width:3px}
+.nthink::-webkit-scrollbar-thumb{background:var(--live);border-radius:3px;opacity:.5}
+.nthink[hidden]{display:none}
+.nthink .caret{color:rgba(232,161,58,.9)}
+.nchips{display:flex;flex-wrap:wrap;gap:4px}
+
+/* a chip is a number and a word: b carries the value, the rest is the unit */
+.c{
+  display:inline-flex;align-items:baseline;gap:4px;
+  font-size:10px;font-weight:500;letter-spacing:.3px;color:rgba(232,237,247,.6);
+  text-transform:lowercase;
+  font-variant-numeric:tabular-nums;font-feature-settings:'tnum' 1;
+  background:rgba(255,255,255,.045);border:1px solid var(--line);border-radius:999px;
+  padding:3px 8px;white-space:nowrap;
+}
+.c b{font-weight:600;color:var(--ink);font-size:10.5px;letter-spacing:0}
+.c.gold b{color:var(--gold)}
+.c.blue b{color:var(--blue)}
+.c.teal b{color:var(--teal)}
+.c.violet b{color:var(--violet)}
+.c.red b{color:var(--red)}
+/* the pill itself takes its stage colour, faintly: the meta row then reads gold memory /
+   blue action / teal output instead of one grey row of numbers */
+.c.gold{border-color:rgba(232,161,58,.32);background:rgba(232,161,58,.08)}
+.c.blue{border-color:rgba(63,108,255,.34);background:rgba(63,108,255,.09)}
+.c.teal{border-color:rgba(45,212,191,.30);background:rgba(45,212,191,.08)}
+.c.violet{border-color:rgba(139,124,246,.30);background:rgba(139,124,246,.08)}
+.c.red{border-color:rgba(255,95,107,.30);background:rgba(255,95,107,.08)}
+.c.gold,.c.blue,.c.teal,.c.violet,.c.red{transition:background .3s,border-color .3s}
+#now-health,#now-usage{cursor:pointer}
+#now-health:hover .c,#now-usage:hover .c{background:rgba(255,255,255,.09)}
+
+/* the orb, full screen, when you tap it */
+#orbFocus{
+  position:fixed;inset:0;z-index:18;display:none;place-items:center;
+  background:rgba(3,5,9,.82);backdrop-filter:blur(8px);
+}
+#orbFocus.on{display:grid}
+#orbBig{width:min(72vmin,420px);height:min(72vmin,420px);display:block}
+.of-state{
+  position:absolute;left:0;right:0;text-align:center;top:calc(50% + min(36vmin,210px));
+  font-size:13px;font-weight:600;letter-spacing:2px;text-transform:lowercase;color:var(--ink);
+}
+.of-meta{position:absolute;left:0;right:0;text-align:center;top:calc(50% + min(36vmin,210px) + 22px);
+  font-size:10px;color:var(--dim);letter-spacing:.8px}
+.of-hint{position:absolute;left:0;right:0;bottom:calc(30px + var(--sab));text-align:center;
+  font-size:9px;letter-spacing:1.6px;text-transform:uppercase;color:rgba(255,255,255,.28)}
+
+/* ---------------- ticker ---------------- */
+#ticker{
+  /* NOT a fixed height: the bottom safe-area inset is padding, so on an iPhone with a 34px
+     home-indicator strip a hard `height:32px` left ~0px for the text and the footer read as
+     blocked. The box now grows to fit its padding. */
+  position:fixed;left:0;right:0;bottom:0;z-index:6;min-height:32px;box-sizing:border-box;
+  display:flex;align-items:center;gap:14px;overflow:hidden;
+  padding:6px calc(18px + env(safe-area-inset-right)) calc(5px + var(--sab)) calc(18px + env(safe-area-inset-left));
+  border-top:1px solid var(--line);background:var(--bg);   /* flat: the ticker is not a panel */
+  font-size:10.5px;letter-spacing:.35px;color:rgba(232,237,247,.5);white-space:nowrap;pointer-events:none;
+  font-variant-numeric:tabular-nums;font-feature-settings:'tnum' 1;
+}
+#ticker .dot{width:5px;height:5px;border-radius:50%;background:var(--mint);flex:0 0 5px;
+  box-shadow:0 0 8px rgba(61,220,151,.8);animation:pulse 2.4s ease-in-out infinite}
+#ticker .dot.idle{background:var(--dim);box-shadow:none;animation:none}
+@keyframes pulse{0%,100%{opacity:.35}50%{opacity:1}}
+#ticker .tk{display:inline-flex;align-items:baseline;gap:5px;color:var(--dim)}
+#ticker .tk em{font-style:normal;color:rgba(232,237,247,.72)}
+#ticker .tk.gold em{color:var(--gold)}
+#ticker .tk.blue em{color:var(--blue)}
+#ticker .tk.green em{color:var(--mint)}
+#ticker .tk.red em{color:var(--red)}
+
+/* ---------------- drawer ---------------- */
+#scrim{
+  position:fixed;inset:0;background:rgba(3,5,9,.58);z-index:19;opacity:0;
+  pointer-events:none;transition:opacity .2s ease;
+}
+#scrim.on{opacity:1;pointer-events:auto}
+
+#drawer{
+  position:fixed;top:0;right:0;bottom:0;width:min(440px,94vw);z-index:20;
+  display:flex;flex-direction:column;padding:20px 18px;
+  background:rgba(8,12,20,.94);backdrop-filter:blur(18px);
+  border-left:1px solid var(--line);
+  transform:translateX(105%);transition:transform .3s cubic-bezier(.2,.8,.2,1);
+}
+#drawer.open{transform:translateX(0)}
+
+/* a 44px target, not a 26px glyph: this is the only way out on a phone */
+#menu-btn{display:none}
+
+#drawer-close{
+  position:absolute;top:8px;right:8px;z-index:2;width:44px;height:44px;border-radius:50%;
+  display:grid;place-items:center;cursor:pointer;
+  background:rgba(255,255,255,.06);border:1px solid var(--line2);
+  color:var(--ink);font-size:21px;line-height:1;
+  -webkit-tap-highlight-color:transparent;transition:background .15s;
+}
+#drawer-close:hover,#drawer-close:active{background:rgba(255,255,255,.15);color:#fff}
+.dgrip{display:none}
+
+#drawer h2{
+  font-size:10.5px;font-weight:600;letter-spacing:1.6px;text-transform:uppercase;
+  color:var(--dim);margin:4px 0 14px;padding-right:56px;word-break:break-all;
+}
+#drawer-body{
+  flex:1;overflow-y:auto;display:flex;flex-direction:column;gap:8px;
+  overscroll-behavior:contain;scrollbar-width:thin;
+}
+#drawer-body::-webkit-scrollbar{width:6px}
+#drawer-body::-webkit-scrollbar-thumb{background:rgba(255,255,255,.12);border-radius:3px}
+
+/* one row = one fact */
+#drawer-body .node,#drawer-body .mem-row{
+  display:flex;align-items:flex-start;gap:10px;
+  padding:7px 9px;border-radius:8px;border:1px solid transparent;
+  font-size:11.5px;line-height:1.45;color:rgba(232,237,247,.86);
+  transition:background .12s,border-color .12s;
+}
+#drawer-body .node:hover,#drawer-body .mem-row:hover{
+  background:rgba(255,255,255,.045);border-color:var(--line);
+}
+#drawer-body .node .k{
+  flex:0 0 auto;min-width:62px;font-size:9px;letter-spacing:1px;text-transform:uppercase;
+  color:var(--dim);padding-top:2px;
+}
+#drawer-body .node .vl{flex:1;word-break:break-word}
+#drawer-body .node .tm{flex:0 0 auto;font-size:9px;color:rgba(139,149,168,.8);padding-top:2px}
+#drawer-body .node .tn{font-size:9px;color:var(--dim);letter-spacing:.4px}
+#drawer-body .node.toolcall{font-family:ui-monospace,'SF Mono',Consolas,monospace;font-size:10.5px}
+
+#drawer-body .mr-text{flex:1;word-break:break-word}
+#drawer-body .mr-meta{flex:0 0 auto;font-size:9px;color:var(--dim);letter-spacing:.4px;text-align:right}
+
+#drawer-body .exp{display:flex;flex-direction:column;gap:4px;
+  padding:8px 10px;border:1px solid var(--line);border-radius:9px;background:rgba(255,255,255,.022)}
+#drawer-body .exp-row{display:flex;align-items:baseline;gap:8px;font-size:10.5px}
+#drawer-body .exp-h{font-size:9px;letter-spacing:1.2px;text-transform:uppercase;color:var(--gold)}
+#drawer-body .exp-desc{font-size:10.5px;color:rgba(232,237,247,.78);line-height:1.45}
+#drawer-body .exp-note{font-size:9.5px;color:var(--dim)}
+#drawer-body .a{font-weight:600;color:var(--ink)}
+#drawer-body .b{color:var(--dim)}
+#drawer-body .lb{font-size:9px;letter-spacing:1px;text-transform:uppercase;color:var(--dim)}
+#drawer-body .cur{color:var(--mint)}
+#drawer-body .hot{color:var(--gold)}
+#drawer-body .empty{font-size:11px;color:var(--dim);padding:10px 2px}
+/* verbatim code, selectable — the one place in the app where text selection is allowed */
+#drawer-body pre.code{
+  margin-top:6px;padding:8px 10px;border-radius:8px;
+  background:rgba(0,0,0,.3);border:1px solid var(--line);
+  font-family:ui-monospace,'SF Mono',Consolas,monospace;font-size:10px;line-height:1.55;
+  color:rgba(222,230,244,.88);white-space:pre-wrap;word-break:break-word;
+  max-height:40vh;overflow:auto;user-select:text;-webkit-user-select:text;
+}
+#drawer-body .tap{cursor:pointer}
+#drawer-body .st{margin-top:10px;padding-top:10px;border-top:1px solid var(--line);
+  font-size:9px;letter-spacing:1.4px;text-transform:uppercase;color:rgba(139,149,168,.75)}
+
+/* ---------------- phone: same graph rotated, card becomes a strip ---------------- */
+@media (max-width:760px){
+  header{padding:12px calc(14px + env(safe-area-inset-right)) 8px calc(14px + env(safe-area-inset-left));gap:12px}
+  .brand{font-size:10px;letter-spacing:2.6px}
+  .legend{gap:9px}
+  .legend span{font-size:7.5px;letter-spacing:1px;gap:4px}
+  .legend i{width:9px}
+
+  /* the card is two rows: orb + state, then one line of headline numbers */
+  #now{
+    left:50%;transform:translateX(-50%);width:94vw;top:calc(64px + var(--sat));bottom:auto;
+    display:grid;grid-template-columns:62px 1fr;grid-template-areas:"orb main" "think think" "meta meta";
+    align-items:center;gap:7px 10px;padding:8px 12px 9px;border-radius:14px;overflow:visible;
+  }
+  .orbwrap{grid-area:orb}
+  .nmain{grid-area:main}
+  .nmeta{grid-area:meta}
+  /* the card must never change height on a phone: 0.9 of the screen is graph, and every
+     pixel the card gains is a relayout of 23 chips. The thinking area is a fixed slot and
+     keeps its box even when the text is stale, so idle and busy render the same height. */
+  .nthink{grid-area:think;margin-top:6px;height:126px;font-size:10px;line-height:1.5;padding-left:6px;
+    overflow-y:auto;min-height:0;max-height:126px}
+  .nthink[hidden]{display:block;visibility:hidden}
+  .orbwrap{width:62px;height:62px;flex:0 0 62px;margin-top:0;padding:0}
+  #orb{width:62px;height:62px;aspect-ratio:auto}
+  .nmain{text-align:left;flex:1;min-width:0}
+  .nstate{font-size:14px;letter-spacing:.1px}
+  .nsub{font-size:9.5px;letter-spacing:.5px;margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  /* the strip shows state + the three headline numbers; the tier counts live in the drawer */
+  .nrow{display:none}
+  /* one line of headline numbers, full width: the old 46vw box silently cut them off */
+  .nmeta{margin-top:0;flex-direction:row;align-items:center;gap:5px;max-width:none;overflow:visible}
+  .nchips{flex-wrap:nowrap;overflow:visible;justify-content:flex-start;gap:4px}
+  .c{font-size:9.5px;padding:2.5px 7px}
+  .c b{font-size:9.5px}
+  /* the turn chips repeat the sub line; the third number in each group lives in the drawer */
+  #now-turn{display:none}
+  #now-usage .c:nth-child(n+3),#now-health .c:nth-child(n+3){display:none}
+
+  /* sheet: content-sized, never taller than 72vh, dismiss by tap-out, grip or swipe */
+  #drawer{
+    top:auto;left:0;right:0;bottom:0;width:100%;max-height:72vh;height:auto;
+    border-left:none;border-top:1px solid var(--line2);border-radius:22px 22px 0 0;
+    padding:0 16px calc(14px + var(--sab));transform:translateY(105%);
+    transition:transform .26s cubic-bezier(.2,.85,.25,1);box-shadow:0 -18px 40px rgba(0,0,0,.5);
+  }
+  #drawer.open{transform:translateY(0)}
+  .dgrip{display:block;width:44px;height:4px;border-radius:3px;margin:9px auto 2px;
+    background:rgba(255,255,255,.22);flex:0 0 auto}
+  #drawer h2{margin:10px 52px 10px 2px;font-size:10px}
+  #drawer-body{font-size:12.5px;gap:7px;padding-bottom:4px}
+  #drawer-close{top:8px;right:8px}
+
+  /* the footer sat a home-indicator clear of the bottom edge (38px of padding on an iPhone),
+     which read as dead space under the graph. It now rides 14px off the edge: still clear of
+     the indicator bar, but the ticker no longer floats. */
+  #ticker{min-height:26px;font-size:9.5px;letter-spacing:.3px;
+    padding:4px 12px calc(2px + var(--sab) * .34)}
+
+  #orbFocus{background:rgba(3,5,9,.9)}
+  #orbBig{width:min(78vmin,340px);height:min(78vmin,340px)}
+}
+
+/* ---- phone menu: one 44px door to every function on the page ------------------- */
+@media (max-width:760px){
+  /* the four-line legend costs 248px of a 390px header: it moves into the menu, where
+     each phase is a tappable row that explains itself */
+  header .legend{display:none}
+  #menu-btn{
+    display:grid;place-items:center;margin-left:auto;flex:0 0 44px;
+    width:44px;height:44px;border-radius:12px;cursor:pointer;
+    background:rgba(255,255,255,.06);border:1px solid var(--line2);color:var(--ink);
+    font-size:16px;line-height:1;-webkit-tap-highlight-color:transparent;
+  }
+  #menu-btn:active{background:rgba(255,255,255,.18)}
+  .mtitle{font-size:9px;letter-spacing:1.5px;text-transform:uppercase;color:var(--dim);
+    margin:10px 2px 2px;font-weight:600}
+  .mrow{
+    display:flex;align-items:center;gap:10px;width:100%;min-height:46px;padding:9px 12px;
+    border-radius:12px;background:rgba(255,255,255,.045);border:1px solid var(--line);
+    color:var(--ink);font:500 13px Montserrat;text-align:left;cursor:pointer;
+    -webkit-tap-highlight-color:transparent;
+  }
+  .mrow:active{background:rgba(255,255,255,.14)}
+  .mrow .msw{width:9px;height:9px;border-radius:3px;flex:0 0 9px}
+  .mrow small{margin-left:auto;color:var(--dim);font-size:10px;font-weight:400;
+    text-align:right;max-width:44%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  /* the two header chips stay as data readouts, but with a real touch target */
+  #now-usage,#now-health{position:relative}
+  #now-usage::after,#now-health::after{content:'';position:absolute;inset:-11px -6px}
+}

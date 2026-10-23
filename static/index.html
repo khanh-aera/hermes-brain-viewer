@@ -1,0 +1,78 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover">
+<title>brain viewer — hermes</title>
+<meta name="description" content="Live read-only view of the AERA brain.">
+<meta name="theme-color" content="#05080f">
+<meta name="color-scheme" content="dark">
+
+<!-- install as an app: no browser chrome, no white flash, real icon -->
+<link rel="manifest" href="/manifest.webmanifest">
+<link rel="icon" href="/favicon.ico" sizes="any">
+<link rel="icon" type="image/png" sizes="192x192" href="/icon-192.png">
+<link rel="apple-touch-icon" sizes="180x180" href="/icon-180.png">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="neuro">
+<meta name="application-name" content="neuro">
+<meta name="format-detection" content="telephone=no">
+
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="/style.css">
+</head>
+<body>
+<canvas id="brain"></canvas>
+<div id="topscrim"></div>
+<div id="mflow" hidden></div>
+
+<header>
+  <div class="brand">brain <b>viewer</b></div>
+  <div class="legend">
+    <span><i class="ln" style="background:#e8a13a"></i>memory</span>
+    <span><i class="sw" style="background:#8b7cf6"></i>reasoning</span>
+    <span><i class="ln" style="background:#3f6cff"></i>action</span>
+    <span><i class="ln" style="background:#3ddc97"></i>output</span>
+  </div>
+  <button id="menu-btn" aria-label="everything on this page" title="everything on this page">☰</button>
+</header>
+
+<div id="now">
+  <div class="orbwrap"><canvas id="orb"></canvas></div>
+  <div class="nmain">
+    <div class="nstate" id="now-state">idle</div>
+    <div class="nsub" id="now-sub">waiting for input</div>
+    <div class="nrow" id="now-stats"></div>
+    <div class="nthink" id="now-think" hidden></div>
+  </div>
+  <div class="nmeta">
+    <div class="nchips" id="now-turn"></div>
+    <div class="nchips" id="now-usage" title="click for token breakdown"></div>
+    <div class="nchips" id="now-health" title="click for errors + cron board"></div>
+  </div>
+</div>
+
+<div id="orbFocus">
+  <canvas id="orbBig"></canvas>
+  <div class="of-state" id="of-state">idle</div>
+  <div class="of-meta" id="of-meta"></div>
+  <div class="of-hint">tap to close</div>
+</div>
+
+<div id="scrim"></div>
+
+<div id="drawer" role="dialog" aria-modal="true">
+  <div class="dgrip"></div>
+  <button id="drawer-close" aria-label="close">×</button>
+  <h2 id="drawer-title">—</h2>
+  <div id="drawer-body"></div>
+</div>
+
+<div id="ticker"></div>
+
+<script src="/app.js"></script>
+</body>
+</html>

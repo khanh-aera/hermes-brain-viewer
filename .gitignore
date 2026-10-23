@@ -1,0 +1,5 @@
+__pycache__/
+*.pyc
+server.log
+demo/agent.log
+.DS_Store
